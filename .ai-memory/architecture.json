@@ -1,0 +1,12 @@
+{
+  "framework": "TypeScript (generic)",
+  "languages": [
+    "JSON",
+    "Markdown",
+    "TypeScript"
+  ],
+  "directories": {
+    "src": "Source code"
+  },
+  "entryPoints": []
+}

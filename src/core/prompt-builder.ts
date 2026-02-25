@@ -44,49 +44,42 @@ Return ONLY valid JSON, no markdown fences, no extra text.`;
 
 // ── Ask Prompt ─────────────────────────────────────────────────────────
 
+function truncate(text: string, maxLines = 200): string {
+    const lines = text.split('\n');
+    if (lines.length <= maxLines) return text;
+    return lines.slice(0, maxLines).join('\n') + '\n... (truncated)';
+}
+
 export function buildAskPrompt(
     question: string,
     memory: Memory,
     relevantFiles: Record<string, string>,
 ): string {
-    const fileSnippets = Object.entries(relevantFiles)
-        .map(([name, content]) => `### ${name}\n\`\`\`\n${content}\n\`\`\``)
+    // Truncate file snippets to keep prompt small
+    const fileEntries = Object.entries(relevantFiles).slice(0, 5);
+    const fileSnippets = fileEntries
+        .map(([name, content]) => `### ${name}\n\`\`\`\n${truncate(content, 50)}\n\`\`\``)
         .join('\n\n');
 
-    return `You are an expert software engineer helping with a project. Use the project context below to answer the question.
+    // Use compact summary (first 15 lines only)
+    const summary = memory.projectSummary.split('\n').slice(0, 15).join('\n');
 
-## Project Summary
-${memory.projectSummary}
+    return `You are a software engineer. Answer the question using the project context.
+
+## Project
+${summary}
 
 ## Architecture
-\`\`\`json
-${JSON.stringify(memory.architecture, null, 2)}
-\`\`\`
+${JSON.stringify(memory.architecture)}
 
-## Feature Registry
-\`\`\`json
-${JSON.stringify(memory.features, null, 2)}
-\`\`\`
+## Decisions
+${memory.decisions.split('\n').slice(0, 20).join('\n')}
 
-## Architectural Decisions
-${memory.decisions}
-
-## Recent Changes
-\`\`\`json
-${JSON.stringify(memory.changeLog.slice(0, 5), null, 2)}
-\`\`\`
-
-## Relevant Source Files
-${fileSnippets || '_No relevant files detected._'}
-
----
+## Files
+${fileSnippets || 'None'}
 
 ## Question
 ${question}
 
-## Instructions
-- Provide a clear, actionable answer using the project context above.
-- Reference specific files, functions, or patterns when relevant.
-- If suggesting code changes, show the code but do NOT auto-apply anything.
-- Keep your response concise and well-structured.`;
+Be concise and actionable.`;
 }

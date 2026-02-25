@@ -1,7 +1,10 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import simpleGit, { type SimpleGit, type DiffResultTextFile } from 'simple-git';
+import _simpleGit, { type SimpleGit, type DiffResultTextFile } from 'simple-git';
 import { MEMORY_FILES } from './memory.js';
+
+// Handle ESM/CJS interop
+const simpleGit = (_simpleGit as any).default ?? _simpleGit;
 
 // ── Types ──────────────────────────────────────────────────────────────
 
