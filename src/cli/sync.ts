@@ -1,50 +1,48 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import ora from 'ora';
-import { getDiffSummary, getCurrentCommit, setLastSyncCommit } from '../core/git.js';
-import { readMemory, updateMemory, MEMORY_FILES, type Architecture, type ChangeLogEntry, type Feature } from '../core/memory.js';
-import { buildSyncPrompt } from '../core/prompt-builder.js';
-import { askAI } from '../ai/client.js';
+import { getDiffSummary, getCurrentCommit, setLastSyncCommit, getDependencyChanges } from '../core/git.js';
+import { readMemory, updateMemory, MEMORY_FILES, type ChangeLogEntry, type Feature, buildArchitectureFromProject } from '../core/memory.js';
+import { scanProject } from '../core/scanner.js';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-interface SyncAIUpdate {
-    architecture?: Partial<Architecture>;
-    features?: Feature[];
-    changeLogEntry?: ChangeLogEntry;
+function toFeatureName(segment: string): string {
+    return segment
+        .replace(/[-_]/g, ' ')
+        .replace(/\b\w/g, c => c.toUpperCase());
 }
 
-function isValidChangeLogEntry(value: unknown): value is ChangeLogEntry {
-    if (!value || typeof value !== 'object') return false;
-    const entry = value as Record<string, unknown>;
-    return typeof entry.date === 'string'
-        && typeof entry.commit === 'string'
-        && typeof entry.summary === 'string'
-        && Array.isArray(entry.filesChanged)
-        && entry.filesChanged.every(file => typeof file === 'string');
-}
+function detectFeatureCandidates(files: string[]): Feature[] {
+    const featureMap = new Map<string, Set<string>>();
 
-function parseSyncResponse(response: string): SyncAIUpdate | null {
-    try {
-        const cleaned = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-        const parsed = JSON.parse(cleaned) as SyncAIUpdate;
+    for (const file of files) {
+        const parts = file.split('/');
+        if (parts.length < 2) continue;
 
-        if (parsed.features && !Array.isArray(parsed.features)) {
-            return null;
+        const [root, segment] = parts;
+        if (!segment) continue;
+
+        if (root === 'src' || root === 'app' || root === 'modules' || root === 'features') {
+            const key = `${root}/${segment}`;
+            if (!featureMap.has(key)) featureMap.set(key, new Set<string>());
+            featureMap.get(key)?.add(file);
         }
-
-        if (parsed.changeLogEntry && !isValidChangeLogEntry(parsed.changeLogEntry)) {
-            return null;
-        }
-
-        return parsed;
-    } catch {
-        return null;
     }
+
+    return [...featureMap.entries()].map(([key, filesSet]) => {
+        const name = toFeatureName(key.split('/')[1]);
+        return {
+            name,
+            description: `Detected structural feature candidate from ${key}`,
+            status: 'planned' as const,
+            files: [...filesSet].slice(0, 20),
+        };
+    });
 }
 
 export const syncCommand = new Command('sync')
-    .description('Sync memory with recent git changes using AI analysis')
+    .description('Sync memory with latest git changes (AI-free, deterministic)')
     .action(async () => {
         const rootDir = process.cwd();
         const memDir = path.join(rootDir, MEMORY_FILES.dir);
@@ -64,52 +62,45 @@ export const syncCommand = new Command('sync')
                 return;
             }
 
-            spinner.text = `Found ${diff.filesChanged.length} changed files. Consulting AI...`;
+            spinner.text = 'Updating architecture snapshot...';
+            const info = scanProject(rootDir);
+            const architecture = buildArchitectureFromProject(info);
+            const dependencyChanges = await getDependencyChanges(rootDir);
 
             const memory = readMemory(rootDir);
-            const prompt = buildSyncPrompt(diff, memory);
-            const response = await askAI(
-                prompt,
-                'You are a code analysis assistant. Always respond with valid JSON.',
-                { usage: 'memory' },
-            );
+            const existingNames = new Set(memory.features.map(f => f.name.toLowerCase()));
+            const candidates = detectFeatureCandidates([...diff.addedFiles, ...diff.modifiedFiles])
+                .filter(feature => !existingNames.has(feature.name.toLowerCase()));
 
-            spinner.text = 'Updating memory files...';
+            const combinedFeatures = [...memory.features, ...candidates];
 
-            const updates = parseSyncResponse(response);
-            if (!updates) {
-                spinner.warn(chalk.yellow('AI response was not valid JSON. Saving fallback change log entry.'));
-                updateMemory(rootDir, {
-                    changeLogEntry: {
-                        date: new Date().toISOString(),
-                        commit: diff.commit,
-                        summary: `${diff.filesChanged.length} files changed (AI parse failed)`,
-                        filesChanged: diff.filesChanged,
-                    },
-                });
-                const currentHash = await getCurrentCommit(rootDir);
-                await setLastSyncCommit(rootDir, currentHash);
-                return;
-            }
+            const changeLogEntry: ChangeLogEntry = {
+                date: new Date().toISOString(),
+                commit: diff.commit,
+                summary: `A:${diff.addedFiles.length} M:${diff.modifiedFiles.length} D:${diff.deletedFiles.length} across ${diff.filesChanged.length} files`,
+                filesChanged: diff.filesChanged,
+                addedFiles: diff.addedFiles,
+                modifiedFiles: diff.modifiedFiles,
+                deletedFiles: diff.deletedFiles,
+                dependencyChanges,
+            };
 
-            // Apply updates
             updateMemory(rootDir, {
-                architecture: updates.architecture,
-                features: updates.features,
-                changeLogEntry: updates.changeLogEntry,
+                architecture,
+                features: combinedFeatures,
+                changeLogEntry,
             });
 
             const currentHash = await getCurrentCommit(rootDir);
             await setLastSyncCommit(rootDir, currentHash);
 
-            spinner.succeed(chalk.green('Memory synced successfully!'));
+            spinner.succeed(chalk.green('Memory synced successfully (AI-free).'));
             console.log('');
             console.log(chalk.dim(`  Commit: ${currentHash.slice(0, 8)}`));
             console.log(chalk.dim(`  Files changed: ${diff.filesChanged.length} (A:${diff.addedFiles.length} M:${diff.modifiedFiles.length} D:${diff.deletedFiles.length})`));
             console.log(chalk.dim(`  Insertions: +${diff.insertions}  Deletions: -${diff.deletions}`));
-            if (updates.changeLogEntry?.summary) {
-                console.log(chalk.dim(`  Summary: ${updates.changeLogEntry.summary}`));
-            }
+            console.log(chalk.dim(`  Feature candidates added: ${candidates.length}`));
+            console.log(chalk.dim(`  Dependency changes: +${dependencyChanges.added.length} ~${dependencyChanges.updated.length} -${dependencyChanges.removed.length}`));
             console.log('');
         } catch (error: unknown) {
             spinner.fail(chalk.red('Sync failed'));
