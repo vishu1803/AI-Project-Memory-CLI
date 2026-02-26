@@ -1,101 +1,72 @@
-# 🧠 AI Memory
+# 🧠 ai-memory
 
-> CLI tool that maintains structured project memory for AI-assisted development.
+Deterministic, **AI-free** project memory CLI for software projects.
 
-Prevents AI context loss during coding by maintaining a local structured memory of your project that can be injected into AI prompts.
+`ai-memory` maintains a local `.ai-memory/` folder that tracks architecture, features, decisions, and commit-based changes so any external AI tool can consume stable project context later.
+
+## Why
+
+- Prevent project-context loss over time
+- Keep memory deterministic and offline
+- Avoid model lock-in (memory engine has zero AI dependencies)
+- Let developers use any external AI/IDE assistant as a consumer
 
 ## Installation
 
 ```bash
 npm install
 npm run build
-npm link    # makes 'ai-memory' available globally
+npm link
 ```
-
-## Setup
-
-```bash
-cp .env.example .env
-# Edit .env with your API key
-```
-
-Supported providers (any OpenAI-compatible API):
-- **OpenAI** — `AI_BASE_URL=https://api.openai.com/v1`
-- **Anthropic** (via proxy) — use a compatible endpoint
-- **Local models** (Ollama, LM Studio) — `AI_BASE_URL=http://localhost:11434/v1`
 
 ## Commands
 
 ### `ai-memory init`
 
-Initialize AI memory in the current project. Creates a `.ai-memory/` folder with:
-
-| File | Purpose |
-|------|---------|
-| `project-summary.md` | Human-readable project overview |
-| `architecture.json` | Framework, languages, directory map |
-| `features.json` | Feature registry with status tracking |
-| `decisions.md` | Timestamped architectural decisions |
-| `change-log.json` | Commit-based change history |
-
-```bash
-cd your-project
-ai-memory init
-```
+One-time setup:
+- creates `.ai-memory/`
+- writes memory files
+- installs `.git/hooks/post-commit` hook that runs `ai-memory sync`
 
 ### `ai-memory sync`
 
-Analyze git changes since last sync and update memory files using AI.
+AI-free deterministic sync from git:
+- detects added/modified/deleted files
+- refreshes architecture snapshot from project scan
+- records dependency changes from `package.json`
+- appends structured commit entry to `change-log.json`
+- adds feature candidates from structural paths like `src/<module>`
 
-```bash
-git commit -m "add user auth"
-ai-memory sync
-```
+> Normally this runs automatically after each commit via git hook.
 
 ### `ai-memory decision "text"`
 
-Log an architectural decision with a timestamp.
-
-```bash
-ai-memory decision "Switch from REST to GraphQL for the API layer"
-```
+Appends a timestamped manual decision to `.ai-memory/decisions.md`.
 
 ### `ai-memory ask "question"`
 
-Ask AI a question with full project context injected automatically.
+Builds and prints a structured context prompt (memory + relevant files) for use in any external AI tool.
 
-```bash
-ai-memory ask "How should I add rate limiting to the API?"
-ai-memory ask "What files would I need to change to add dark mode?" -f src/theme.ts
-```
+## Memory Files
 
-## Project Structure
-
-```
-src/
-├── index.ts          # CLI entry point
-├── ai/
-│   └── client.ts     # OpenAI-compatible API client
-├── cli/
-│   ├── init.ts       # init command
-│   ├── sync.ts       # sync command
-│   ├── decision.ts   # decision command
-│   └── ask.ts        # ask command
-└── core/
-    ├── scanner.ts     # Project structure scanner
-    ├── memory.ts      # Memory file management
-    ├── git.ts         # Git integration (simple-git)
-    └── prompt-builder.ts  # Structured prompt construction
-```
+`.ai-memory/`
+- `project-summary.md`
+- `architecture.json`
+- `features.json`
+- `decisions.md`
+- `change-log.json`
 
 ## Design Principles
 
-- **Commit-based** — memory updates tied to git commits
-- **Human-readable** — all memory files are plain Markdown/JSON
-- **Minimal tokens** — structured prompts to reduce API usage
-- **Suggestion-only** — AI advises, never auto-modifies your code
-- **Modular** — clean separation of core, CLI, and AI layers
+- AI-free core engine
+- deterministic outputs
+- commit-based updates
+- human-readable files
+- offline/local-first
 
-## License
+## Testing
 
-MIT
+```bash
+npm run test
+npm run test:ci
+```
