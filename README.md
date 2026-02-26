@@ -16,13 +16,34 @@ npm link    # makes 'ai-memory' available globally
 
 ```bash
 cp .env.example .env
-# Edit .env with your API key
+# Edit .env with your API + model settings
 ```
 
-Supported providers (any OpenAI-compatible API):
-- **OpenAI** — `AI_BASE_URL=https://api.openai.com/v1`
-- **Anthropic** (via proxy) — use a compatible endpoint
-- **Local models** (Ollama, LM Studio) — `AI_BASE_URL=http://localhost:11434/v1`
+The CLI supports any OpenAI-compatible provider.
+
+## AI Architecture (aligned with project vision)
+
+### Minimal built-in AI (memory maintenance)
+Used for **structured summarization only** (especially `sync`):
+- update architecture/features/changelog memory
+- low-token, low-temperature responses
+- no auto file modification
+
+Configured with:
+- `AI_MEMORY_MODEL`
+
+### External coding AI (developer suggestions)
+Used for `ask` command to get implementation guidance with memory context injected:
+- suggestions/refactoring guidance
+- developer applies changes manually
+
+Configured with:
+- `AI_CODING_MODEL`
+
+Shared config:
+- `AI_API_KEY`
+- `AI_BASE_URL`
+- `AI_MODEL` (fallback model for both flows)
 
 ## Commands
 
@@ -45,7 +66,7 @@ ai-memory init
 
 ### `ai-memory sync`
 
-Analyze git changes since last sync and update memory files using AI.
+Analyze git changes since last sync and update memory files using minimal AI summarization.
 
 ```bash
 git commit -m "add user auth"
@@ -62,7 +83,7 @@ ai-memory decision "Switch from REST to GraphQL for the API layer"
 
 ### `ai-memory ask "question"`
 
-Ask AI a question with full project context injected automatically.
+Ask coding AI for suggestions with full project memory context injected.
 
 ```bash
 ai-memory ask "How should I add rate limiting to the API?"
@@ -95,6 +116,18 @@ src/
 - **Minimal tokens** — structured prompts to reduce API usage
 - **Suggestion-only** — AI advises, never auto-modifies your code
 - **Modular** — clean separation of core, CLI, and AI layers
+
+## Testing
+
+```bash
+npm run test
+npm run test:ci
+```
+
+Includes:
+- CLI smoke checks
+- memory workflow tests
+- mocked AI integration path (`sync` + `ask`)
 
 ## License
 

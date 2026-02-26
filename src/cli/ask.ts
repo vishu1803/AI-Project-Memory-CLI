@@ -51,7 +51,11 @@ export const askCommand = new Command('ask')
             // Build and send prompt
             spinner.text = 'Asking AI...';
             const prompt = buildAskPrompt(question, memory, relevantFiles);
-            const response = await askAI(prompt, 'You are an expert software engineer. Be concise, specific, and actionable.');
+            const response = await askAI(
+                prompt,
+                'You are an expert software engineer. Be concise, specific, and actionable.',
+                { usage: 'coding' },
+            );
 
             spinner.stop();
 

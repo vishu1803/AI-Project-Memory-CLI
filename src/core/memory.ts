@@ -199,6 +199,9 @@ export function updateMemory(rootDir: string, update: MemoryUpdate): void {
 // ── Decision ───────────────────────────────────────────────────────────
 
 export function appendDecision(rootDir: string, text: string): void {
+    const memDir = path.join(rootDir, MEMORY_FILES.dir);
+    ensureDir(memDir);
+
     const filePath = path.join(rootDir, MEMORY_FILES.decisions);
     const timestamp = new Date().toISOString();
     const entry = `\n- **[${timestamp}]** ${text}\n`;
