@@ -14,6 +14,9 @@ export interface DiffSummary {
     insertions: number;
     deletions: number;
     filesChanged: string[];
+    addedFiles: string[];
+    modifiedFiles: string[];
+    deletedFiles: string[];
     diffs: string;
 }
 
@@ -43,6 +46,31 @@ export async function getCurrentCommit(rootDir: string): Promise<string> {
     return log.latest?.hash || 'HEAD';
 }
 
+function parseNameStatus(rawNameStatus: string): {
+    addedFiles: string[];
+    modifiedFiles: string[];
+    deletedFiles: string[];
+} {
+    const addedFiles: string[] = [];
+    const modifiedFiles: string[] = [];
+    const deletedFiles: string[] = [];
+
+    for (const line of rawNameStatus.split('\n')) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+
+        const [status, ...fileParts] = trimmed.split(/\s+/);
+        const file = fileParts.join(' ').trim();
+        if (!file) continue;
+
+        if (status.startsWith('A')) addedFiles.push(file);
+        else if (status.startsWith('D')) deletedFiles.push(file);
+        else modifiedFiles.push(file);
+    }
+
+    return { addedFiles, modifiedFiles, deletedFiles };
+}
+
 export async function getDiffSummary(rootDir: string, sinceCommit?: string): Promise<DiffSummary> {
     const git = getGit(rootDir);
 
@@ -51,18 +79,23 @@ export async function getDiffSummary(rootDir: string, sinceCommit?: string): Pro
 
     let diff;
     let rawDiff: string;
+    let rawNameStatus = '';
 
     if (since) {
         diff = await git.diffSummary([since, 'HEAD']);
         rawDiff = await git.diff([since, 'HEAD', '--stat']);
+        rawNameStatus = await git.raw(['diff', '--name-status', since, 'HEAD']);
     } else {
-        // First sync — diff against empty tree
+        // First sync — diff against previous commit if available
         diff = await git.diffSummary(['HEAD~1', 'HEAD']).catch(async () => {
-            // Single-commit repo — show all files
+            // Single-commit repo — show staged changes if present
             return git.diffSummary(['--cached']);
         });
         rawDiff = await git.diff(['HEAD~1', 'HEAD', '--stat']).catch(() => '');
+        rawNameStatus = await git.raw(['diff', '--name-status', 'HEAD~1', 'HEAD']).catch(() => '');
     }
+
+    const { addedFiles, modifiedFiles, deletedFiles } = parseNameStatus(rawNameStatus);
 
     return {
         commit: currentCommit,
@@ -70,6 +103,9 @@ export async function getDiffSummary(rootDir: string, sinceCommit?: string): Pro
         insertions: diff.insertions,
         deletions: diff.deletions,
         filesChanged: diff.files.map(f => f.file),
+        addedFiles,
+        modifiedFiles,
+        deletedFiles,
         diffs: rawDiff,
     };
 }
