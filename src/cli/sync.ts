@@ -68,7 +68,11 @@ export const syncCommand = new Command('sync')
 
             const memory = readMemory(rootDir);
             const prompt = buildSyncPrompt(diff, memory);
-            const response = await askAI(prompt, 'You are a code analysis assistant. Always respond with valid JSON.');
+            const response = await askAI(
+                prompt,
+                'You are a code analysis assistant. Always respond with valid JSON.',
+                { usage: 'memory' },
+            );
 
             spinner.text = 'Updating memory files...';
 

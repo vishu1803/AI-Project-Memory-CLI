@@ -7,10 +7,28 @@ function sleep(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-export async function askAI(prompt: string, systemMessage?: string): Promise<string> {
+export type AIUsage = 'memory' | 'coding';
+
+interface AskAIOptions {
+    usage?: AIUsage;
+    maxTokens?: number;
+    temperature?: number;
+}
+
+function getModelForUsage(usage: AIUsage): string {
+    if (usage === 'memory') {
+        return process.env.AI_MEMORY_MODEL || process.env.AI_MODEL || 'gpt-4o-mini';
+    }
+    return process.env.AI_CODING_MODEL || process.env.AI_MODEL || 'gpt-4o-mini';
+}
+
+export async function askAI(prompt: string, systemMessage?: string, options: AskAIOptions = {}): Promise<string> {
     const apiKey = process.env.AI_API_KEY;
-    const model = process.env.AI_MODEL || 'gemini-2.0-flash';
-    const baseUrl = (process.env.AI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta/openai').replace(/\/+$/, '');
+    const usage = options.usage || 'coding';
+    const model = getModelForUsage(usage);
+    const baseUrl = (process.env.AI_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '');
+    const temperature = options.temperature ?? (usage === 'memory' ? 0.1 : 0.3);
+    const maxTokens = options.maxTokens ?? (usage === 'memory' ? 1200 : 2048);
 
     if (!apiKey) {
         throw new Error(
@@ -34,8 +52,8 @@ export async function askAI(prompt: string, systemMessage?: string): Promise<str
                 {
                     model,
                     messages,
-                    temperature: 0.3,
-                    max_tokens: 2048,
+                    temperature,
+                    max_tokens: maxTokens,
                 },
                 {
                     headers: {
