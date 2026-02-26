@@ -2,11 +2,46 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import ora from 'ora';
 import { getDiffSummary, getCurrentCommit, setLastSyncCommit } from '../core/git.js';
-import { readMemory, updateMemory, MEMORY_FILES } from '../core/memory.js';
+import { readMemory, updateMemory, MEMORY_FILES, type Architecture, type ChangeLogEntry, type Feature } from '../core/memory.js';
 import { buildSyncPrompt } from '../core/prompt-builder.js';
 import { askAI } from '../ai/client.js';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+
+interface SyncAIUpdate {
+    architecture?: Partial<Architecture>;
+    features?: Feature[];
+    changeLogEntry?: ChangeLogEntry;
+}
+
+function isValidChangeLogEntry(value: unknown): value is ChangeLogEntry {
+    if (!value || typeof value !== 'object') return false;
+    const entry = value as Record<string, unknown>;
+    return typeof entry.date === 'string'
+        && typeof entry.commit === 'string'
+        && typeof entry.summary === 'string'
+        && Array.isArray(entry.filesChanged)
+        && entry.filesChanged.every(file => typeof file === 'string');
+}
+
+function parseSyncResponse(response: string): SyncAIUpdate | null {
+    try {
+        const cleaned = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        const parsed = JSON.parse(cleaned) as SyncAIUpdate;
+
+        if (parsed.features && !Array.isArray(parsed.features)) {
+            return null;
+        }
+
+        if (parsed.changeLogEntry && !isValidChangeLogEntry(parsed.changeLogEntry)) {
+            return null;
+        }
+
+        return parsed;
+    } catch {
+        return null;
+    }
+}
 
 export const syncCommand = new Command('sync')
     .description('Sync memory with recent git changes using AI analysis')
@@ -37,14 +72,9 @@ export const syncCommand = new Command('sync')
 
             spinner.text = 'Updating memory files...';
 
-            // Parse AI response
-            let updates;
-            try {
-                // Strip markdown code fences if present
-                const cleaned = response.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-                updates = JSON.parse(cleaned);
-            } catch {
-                spinner.warn(chalk.yellow('AI response was not valid JSON. Saving raw response to change log.'));
+            const updates = parseSyncResponse(response);
+            if (!updates) {
+                spinner.warn(chalk.yellow('AI response was not valid JSON. Saving fallback change log entry.'));
                 updateMemory(rootDir, {
                     changeLogEntry: {
                         date: new Date().toISOString(),
@@ -71,7 +101,7 @@ export const syncCommand = new Command('sync')
             spinner.succeed(chalk.green('Memory synced successfully!'));
             console.log('');
             console.log(chalk.dim(`  Commit: ${currentHash.slice(0, 8)}`));
-            console.log(chalk.dim(`  Files changed: ${diff.filesChanged.length}`));
+            console.log(chalk.dim(`  Files changed: ${diff.filesChanged.length} (A:${diff.addedFiles.length} M:${diff.modifiedFiles.length} D:${diff.deletedFiles.length})`));
             console.log(chalk.dim(`  Insertions: +${diff.insertions}  Deletions: -${diff.deletions}`));
             if (updates.changeLogEntry?.summary) {
                 console.log(chalk.dim(`  Summary: ${updates.changeLogEntry.summary}`));
