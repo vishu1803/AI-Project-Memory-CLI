@@ -8,8 +8,20 @@ import { execSync, spawn } from 'node:child_process';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
+function resolveTsxCliPath(startDir: string): string {
+    let currentDir = startDir;
+    for (let i = 0; i < 6; i++) {
+        const candidate = path.join(currentDir, 'node_modules', 'tsx', 'dist', 'cli.mjs');
+        if (existsSync(candidate)) return candidate;
+        const parent = path.dirname(currentDir);
+        if (parent === currentDir) break;
+        currentDir = parent;
+    }
+    return path.join(startDir, 'node_modules', 'tsx', 'dist', 'cli.mjs');
+}
+
 async function runCli(cwd: string, args: string[]): Promise<{ code: number | null; stdout: string; stderr: string }> {
-    const tsxCli = path.join(repoRoot, 'node_modules', 'tsx', 'dist', 'cli.mjs');
+    const tsxCli = resolveTsxCliPath(repoRoot);
     const cliEntry = path.join(repoRoot, 'src', 'index.ts');
 
     return await new Promise(resolve => {
