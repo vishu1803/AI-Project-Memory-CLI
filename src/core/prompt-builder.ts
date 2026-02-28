@@ -21,6 +21,9 @@ ${JSON.stringify(memory.features, null, 2)}
 
 ## Git Changes (since last sync)
 - Files changed: ${diff.filesChanged.length}
+- Added files: ${diff.addedFiles.length}
+- Modified files: ${diff.modifiedFiles.length}
+- Deleted files: ${diff.deletedFiles.length}
 - Insertions: ${diff.insertions}
 - Deletions: ${diff.deletions}
 - Changed files: ${diff.filesChanged.join(', ')}
@@ -63,6 +66,10 @@ export function buildAskPrompt(
 
     // Use compact summary (first 15 lines only)
     const summary = memory.projectSummary.split('\n').slice(0, 15).join('\n');
+    const recentChanges = memory.changeLog
+        .slice(0, 5)
+        .map(entry => `- [${entry.date}] ${entry.summary} (${entry.filesChanged.length} files)`)
+        .join('\n');
 
     return `You are a software engineer. Answer the question using the project context.
 
@@ -72,8 +79,14 @@ ${summary}
 ## Architecture
 ${JSON.stringify(memory.architecture)}
 
+## Feature Registry
+${JSON.stringify(memory.features)}
+
 ## Decisions
 ${memory.decisions.split('\n').slice(0, 20).join('\n')}
+
+## Recent Changes
+${recentChanges || 'No recent changes recorded yet.'}
 
 ## Files
 ${fileSnippets || 'None'}
@@ -81,5 +94,8 @@ ${fileSnippets || 'None'}
 ## Question
 ${question}
 
-Be concise and actionable.`;
+Constraints:
+- Suggestion-only mode: do not claim files were edited.
+- Be concise and actionable.
+- If context is missing, explicitly say what additional info would help.`;
 }
