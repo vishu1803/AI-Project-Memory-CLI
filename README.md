@@ -70,3 +70,12 @@ Builds and prints a structured context prompt (memory + relevant files) for use 
 npm run test
 npm run test:ci
 ```
+
+## Quick Test Project
+
+A minimal runnable site fixture is available at:
+
+- `examples/basic-site`
+
+Use it to quickly validate `ai-memory init`, automatic post-commit sync, and memory file outputs.
+

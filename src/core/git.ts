@@ -118,11 +118,7 @@ export async function getDiffSummary(rootDir: string, sinceCommit?: string): Pro
         rawDiff = await git.diff([since, 'HEAD', '--stat']);
         rawNameStatus = await git.raw(['diff', '--name-status', since, 'HEAD']);
     } else {
-        // First sync — diff against empty tree
-        diff = await git.diffSummary(['HEAD~1', 'HEAD']).catch(async () => {
-            // Single-commit repo — show all files
-            return git.diffSummary(['--cached']);
-        });
+        diff = await git.diffSummary(['HEAD~1', 'HEAD']).catch(async () => git.diffSummary(['--cached']));
         rawDiff = await git.diff(['HEAD~1', 'HEAD', '--stat']).catch(() => '');
         rawNameStatus = await git.raw(['diff', '--name-status', 'HEAD~1', 'HEAD']).catch(() => '');
     }
