@@ -3,6 +3,7 @@ import chalk from 'chalk';
 import ora from 'ora';
 import { scanProject } from '../core/scanner.js';
 import { initMemory, MEMORY_FILES } from '../core/memory.js';
+import { installPostCommitHook } from '../core/git.js';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
@@ -13,7 +14,11 @@ export const initCommand = new Command('init')
         const memDir = path.join(rootDir, MEMORY_FILES.dir);
 
         if (fs.existsSync(memDir)) {
-            console.log(chalk.yellow('⚠  .ai-memory already exists. Use "ai-memory sync" to update.'));
+            console.log(chalk.yellow('⚠  .ai-memory already exists.'));
+            const hookInstalled = installPostCommitHook(rootDir);
+            if (hookInstalled) {
+                console.log(chalk.green('✓ Git post-commit hook verified/installed.'));
+            }
             return;
         }
 
@@ -24,7 +29,9 @@ export const initCommand = new Command('init')
             spinner.text = 'Generating memory files...';
             initMemory(rootDir, info);
 
-            spinner.succeed(chalk.green('AI memory initialized successfully!'));
+            const hookInstalled = installPostCommitHook(rootDir);
+
+            spinner.succeed(chalk.green('Project memory initialized successfully!'));
             console.log('');
             console.log(chalk.dim('  Created files:'));
             console.log(chalk.cyan('    ├── project-summary.md'));
@@ -38,9 +45,13 @@ export const initCommand = new Command('init')
             console.log(chalk.dim(`  Directories: ${info.structure.directories.length}`));
             console.log(chalk.dim(`  Files: ${info.structure.files.length}`));
             console.log('');
-            console.log(chalk.green('✓ Run "ai-memory sync" after your next commit to update memory.'));
+            if (hookInstalled) {
+                console.log(chalk.green('✓ Auto-sync enabled via .git/hooks/post-commit'));
+            } else {
+                console.log(chalk.yellow('⚠ Git repository not found. Auto-sync hook not installed.'));
+            }
         } catch (error: unknown) {
-            spinner.fail(chalk.red('Failed to initialize AI memory'));
+            spinner.fail(chalk.red('Failed to initialize project memory'));
             const msg = error instanceof Error ? error.message : String(error);
             console.error(chalk.red(`  ${msg}`));
             process.exit(1);
