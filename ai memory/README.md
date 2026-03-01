@@ -75,7 +75,7 @@ npm run test:ci
 
 A minimal runnable site fixture is available at:
 
-- `examples/basic-site`
+- `../examples/basic-site`
 
 Use it to quickly validate `ai-memory init`, automatic post-commit sync, and memory file outputs.
 
