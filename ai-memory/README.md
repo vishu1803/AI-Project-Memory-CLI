@@ -79,18 +79,3 @@ A minimal runnable site fixture is available at:
 
 Use it to quickly validate `ai-memory init`, automatic post-commit sync, and memory file outputs.
 
-
-## CI/CD Pipeline
-
-This repository includes GitHub Actions workflows:
-
-- **CI** (`.github/workflows/ci.yml`)
-  - Runs on pushes/PRs affecting `ai memory/` or `examples/`
-  - Tests on Node 20 and 22
-  - Executes: `npm ci`, `npm run test`, `npm run build`, `npm pack --dry-run`
-
-- **CD** (`.github/workflows/cd.yml`)
-  - Runs on version tags like `v1.0.0`
-  - Builds and uploads npm tarball artifact
-  - Optionally publishes to npm when `NPM_TOKEN` secret is configured
-
