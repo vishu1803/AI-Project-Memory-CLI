@@ -12,6 +12,10 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', service: 'basic-site' });
 });
 
+app.get('/api/status', (_req, res, next) => {
+  res.json({ status:'healthy', service: 'testing' });
+})
+
 const port = process.env.PORT || 3000;
 app.listen(port, () => {
   console.log(`basic-site running on http://localhost:${port}`);

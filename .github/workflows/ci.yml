@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - 'ai memory/**'
+      - 'examples/**'
+      - '.github/workflows/ci.yml'
+  pull_request:
+    paths:
+      - 'ai memory/**'
+      - 'examples/**'
+      - '.github/workflows/ci.yml'
+
+jobs:
+  test:
+    name: Build & Test (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22]
+
+    defaults:
+      run:
+        working-directory: ai memory
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+          cache-dependency-path: ai memory/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm run test
+
+      - name: Build
+        run: npm run build
+
+      - name: Package smoke check
+        run: npm pack --dry-run
