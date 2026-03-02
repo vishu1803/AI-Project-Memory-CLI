@@ -1,0 +1,13 @@
+{
+  "name": "basic-site",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Minimal test site for validating ai-memory workflow",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
