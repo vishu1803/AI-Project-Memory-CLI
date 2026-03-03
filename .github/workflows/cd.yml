@@ -47,7 +47,7 @@ jobs:
     name: Publish to npm
     needs: release-artifact
     runs-on: ubuntu-latest
-    if: ${{ secrets.NPM_TOKEN != '' }}
+    if: github.event_name != 'pull_request' && secrets.NPM_TOKEN != ''
 
     defaults:
       run:
