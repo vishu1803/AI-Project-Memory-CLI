@@ -1,4 +1,4 @@
-# 🧠 ai-memory
+#🧠 ai-memory
 
 Deterministic, **AI-free** project memory CLI for software projects.
 
