@@ -1,2 +1,5 @@
 node_modules/
+<<<<<<< HEAD:.gitignore
+=======
 dist/
+>>>>>>> main:ai-memory/.gitignore
