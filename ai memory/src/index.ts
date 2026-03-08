@@ -1,15 +1,11 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander';
-import dotenv from 'dotenv';
 import chalk from 'chalk';
 import { initCommand } from './cli/init.js';
 import { syncCommand } from './cli/sync.js';
 import { decisionCommand } from './cli/decision.js';
 import { askCommand } from './cli/ask.js';
-
-// Load environment variables
-dotenv.config();
 
 const program = new Command();
 

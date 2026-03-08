@@ -13,6 +13,9 @@ export interface ProjectInfo {
     dependencies: Record<string, string>;
     devDependencies: Record<string, string>;
     framework: string;
+    projectType: string;
+    primaryLanguage: string;
+    packageManager: string;
     structure: ProjectStructure;
 }
 
@@ -23,7 +26,7 @@ const IGNORE_DIRS = new Set([
 ]);
 
 const IGNORE_FILES = new Set([
-    '.DS_Store', 'Thumbs.db', 'package-lock.json', 'yarn.lock', 'pnpm-lock.yaml',
+    '.DS_Store', 'Thumbs.db',
 ]);
 
 function detectFramework(deps: Record<string, string>, devDeps: Record<string, string>): string {
@@ -43,6 +46,15 @@ function detectFramework(deps: Record<string, string>, devDeps: Record<string, s
     if (all['react-native']) return 'React Native';
     if (all['typescript']) return 'TypeScript (generic)';
     return 'Node.js';
+}
+
+function detectPackageManager(rootDir: string): string {
+    if (fs.existsSync(path.join(rootDir, 'pnpm-lock.yaml'))) return 'pnpm';
+    if (fs.existsSync(path.join(rootDir, 'yarn.lock'))) return 'yarn';
+    if (fs.existsSync(path.join(rootDir, 'package-lock.json'))) return 'npm';
+    if (fs.existsSync(path.join(rootDir, 'bun.lockb')) || fs.existsSync(path.join(rootDir, 'bun.lock'))) return 'bun';
+    if (fs.existsSync(path.join(rootDir, 'package.json'))) return 'npm';
+    return 'unknown';
 }
 
 function walkDir(dir: string, rootDir: string, maxDepth = 4, currentDepth = 0): ProjectStructure {
@@ -75,6 +87,31 @@ function walkDir(dir: string, rootDir: string, maxDepth = 4, currentDepth = 0): 
     return structure;
 }
 
+function detectLanguages(files: string[]): string[] {
+    const extMap: Record<string, string> = {
+        '.ts': 'TypeScript', '.tsx': 'TypeScript', '.js': 'JavaScript',
+        '.jsx': 'JavaScript', '.py': 'Python', '.go': 'Go',
+        '.rs': 'Rust', '.java': 'Java', '.rb': 'Ruby',
+        '.php': 'PHP', '.cs': 'C#', '.kt': 'Kotlin',
+    };
+
+    const set = new Set<string>();
+    for (const file of files) {
+        const ext = path.extname(file).toLowerCase();
+        if (extMap[ext]) set.add(extMap[ext]);
+    }
+
+    return [...set];
+}
+
+function detectProjectType(rootDir: string, files: string[]): string {
+    if (fs.existsSync(path.join(rootDir, 'package.json'))) return 'Node.js';
+    if (fs.existsSync(path.join(rootDir, 'pyproject.toml')) || fs.existsSync(path.join(rootDir, 'requirements.txt'))) return 'Python';
+    if (files.some(file => file.endsWith('.go'))) return 'Go';
+    if (files.some(file => file.endsWith('.rs'))) return 'Rust';
+    return 'Generic';
+}
+
 export function scanProject(rootDir: string): ProjectInfo {
     const pkgPath = path.join(rootDir, 'package.json');
 
@@ -97,8 +134,8 @@ export function scanProject(rootDir: string): ProjectInfo {
         }
     }
 
-    const framework = detectFramework(dependencies, devDependencies);
     const structure = walkDir(rootDir, rootDir);
+    const languages = detectLanguages(structure.files);
 
     return {
         name,
@@ -106,7 +143,10 @@ export function scanProject(rootDir: string): ProjectInfo {
         description,
         dependencies,
         devDependencies,
-        framework,
+        framework: detectFramework(dependencies, devDependencies),
+        projectType: detectProjectType(rootDir, structure.files),
+        primaryLanguage: languages[0] || 'Unknown',
+        packageManager: detectPackageManager(rootDir),
         structure,
     };
 }

@@ -2,8 +2,6 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import type { ProjectInfo } from './scanner.js';
 
-// ── Paths ──────────────────────────────────────────────────────────────
-
 const MEMORY_DIR = '.ai-memory';
 
 export const MEMORY_FILES = {
@@ -15,8 +13,6 @@ export const MEMORY_FILES = {
     changeLog: path.join(MEMORY_DIR, 'change-log.json'),
     lastSync: path.join(MEMORY_DIR, '.last-sync'),
 } as const;
-
-// ── Helpers ────────────────────────────────────────────────────────────
 
 function ensureDir(dirPath: string): void {
     if (!fs.existsSync(dirPath)) {
@@ -44,13 +40,13 @@ function readText(filePath: string): string {
     }
 }
 
-// ── Types ──────────────────────────────────────────────────────────────
-
 export interface Architecture {
     framework: string;
     languages: string[];
     directories: Record<string, string>;
     entryPoints: string[];
+    dependencies: string[];
+    devDependencies: string[];
 }
 
 export interface Feature {
@@ -65,6 +61,14 @@ export interface ChangeLogEntry {
     commit: string;
     summary: string;
     filesChanged: string[];
+    addedFiles: string[];
+    modifiedFiles: string[];
+    deletedFiles: string[];
+    dependencyChanges?: {
+        added: string[];
+        removed: string[];
+        updated: string[];
+    };
 }
 
 export interface Memory {
@@ -75,35 +79,7 @@ export interface Memory {
     changeLog: ChangeLogEntry[];
 }
 
-// ── Init ───────────────────────────────────────────────────────────────
-
-export function initMemory(rootDir: string, info: ProjectInfo): void {
-    const memDir = path.join(rootDir, MEMORY_FILES.dir);
-    ensureDir(memDir);
-
-    // project-summary.md
-    const summaryLines = [
-        `# ${info.name}`,
-        '',
-        info.description ? `> ${info.description}` : '> _No description provided._',
-        '',
-        `- **Version:** ${info.version}`,
-        `- **Framework:** ${info.framework}`,
-        `- **Dependencies:** ${Object.keys(info.dependencies).length}`,
-        `- **Dev Dependencies:** ${Object.keys(info.devDependencies).length}`,
-        '',
-        '## Key Dependencies',
-        '',
-        ...Object.entries(info.dependencies).map(([k, v]) => `- \`${k}\` ${v}`),
-        '',
-        '## Directory Structure',
-        '',
-        ...info.structure.directories.map(d => `- 📁 \`${d}/\``),
-        '',
-    ];
-    fs.writeFileSync(path.join(rootDir, MEMORY_FILES.projectSummary), summaryLines.join('\n'), 'utf-8');
-
-    // architecture.json
+export function buildArchitectureFromProject(info: ProjectInfo): Architecture {
     const dirMap: Record<string, string> = {};
     for (const d of info.structure.directories) {
         const base = d.split(path.sep)[0] || d;
@@ -112,41 +88,82 @@ export function initMemory(rootDir: string, info: ProjectInfo): void {
         }
     }
 
-    const architecture: Architecture = {
+    return {
         framework: info.framework,
         languages: detectLanguages(info.structure.files),
         directories: dirMap,
         entryPoints: guessEntryPoints(info.structure.files),
+        dependencies: Object.keys(info.dependencies).sort(),
+        devDependencies: Object.keys(info.devDependencies).sort(),
     };
+}
+
+export function initMemory(rootDir: string, info: ProjectInfo): void {
+    const memDir = path.join(rootDir, MEMORY_FILES.dir);
+    ensureDir(memDir);
+
+    const architecture = buildArchitectureFromProject(info);
+    const keyDirectories = info.structure.directories
+        .filter(dir => {
+            const normalized = dir.toLowerCase();
+            return normalized.startsWith('src')
+                || normalized.startsWith('app')
+                || normalized.startsWith('routes')
+                || normalized.startsWith('services')
+                || normalized.startsWith('utils')
+                || normalized.startsWith('lib')
+                || normalized.startsWith('controllers');
+        })
+        .slice(0, 30);
+
+    const mainDependencies = Object.keys(info.dependencies).slice(0, 20);
+
+    const summaryLines = [
+        `# ${info.name}`,
+        '',
+        info.description ? `> ${info.description}` : '> _No description provided._',
+        '',
+        `Project Type: ${info.projectType}`,
+        `Language: ${info.primaryLanguage}`,
+        `Framework: ${info.framework}`,
+        `Package Manager: ${info.packageManager}`,
+        '',
+        'Key Directories:',
+        ...(keyDirectories.length > 0 ? keyDirectories.map(dir => `${dir}/`) : ['(none detected)']),
+        '',
+        'Entry Points:',
+        ...(architecture.entryPoints.length > 0 ? architecture.entryPoints : ['(none detected)']),
+        '',
+        'Main Dependencies:',
+        ...(mainDependencies.length > 0 ? mainDependencies : ['(none detected)']),
+        '',
+    ];
+    fs.writeFileSync(path.join(rootDir, MEMORY_FILES.projectSummary), summaryLines.join('\n'), 'utf-8');
+
     writeJSON(path.join(rootDir, MEMORY_FILES.architecture), architecture);
 
-    // features.json
     const features: Feature[] = [
         {
             name: 'Core',
-            description: `Main ${info.framework} application`,
+            description: `Core ${info.framework} project structure`,
             status: 'active',
             files: info.structure.files.slice(0, 10),
         },
     ];
     writeJSON(path.join(rootDir, MEMORY_FILES.features), features);
 
-    // decisions.md
     const decisionsContent = [
         '# Architectural Decisions',
         '',
         `## ${new Date().toISOString().split('T')[0]}`,
         '',
-        `- Project initialized with ai-memory. Framework detected: **${info.framework}**.`,
+        '- Initialized deterministic project memory (AI-free engine).',
         '',
     ].join('\n');
     fs.writeFileSync(path.join(rootDir, MEMORY_FILES.decisions), decisionsContent, 'utf-8');
 
-    // change-log.json
     writeJSON(path.join(rootDir, MEMORY_FILES.changeLog), []);
 }
-
-// ── Read ───────────────────────────────────────────────────────────────
 
 export function readMemory(rootDir: string): Memory {
     return {
@@ -156,14 +173,14 @@ export function readMemory(rootDir: string): Memory {
             languages: [],
             directories: {},
             entryPoints: [],
+            dependencies: [],
+            devDependencies: [],
         },
         features: readJSON<Feature[]>(path.join(rootDir, MEMORY_FILES.features)) || [],
         decisions: readText(path.join(rootDir, MEMORY_FILES.decisions)),
         changeLog: readJSON<ChangeLogEntry[]>(path.join(rootDir, MEMORY_FILES.changeLog)) || [],
     };
 }
-
-// ── Update ─────────────────────────────────────────────────────────────
 
 export interface MemoryUpdate {
     architecture?: Partial<Architecture>;
@@ -174,13 +191,15 @@ export interface MemoryUpdate {
 export function updateMemory(rootDir: string, update: MemoryUpdate): void {
     if (update.architecture) {
         const current = readJSON<Architecture>(path.join(rootDir, MEMORY_FILES.architecture)) || {
-            framework: 'unknown', languages: [], directories: {}, entryPoints: [],
+            framework: 'unknown', languages: [], directories: {}, entryPoints: [], dependencies: [], devDependencies: [],
         };
         const merged: Architecture = {
             ...current,
             ...update.architecture,
             directories: { ...current.directories, ...update.architecture.directories },
             languages: [...new Set([...current.languages, ...(update.architecture.languages || [])])],
+            dependencies: [...new Set([...current.dependencies, ...(update.architecture.dependencies || [])])],
+            devDependencies: [...new Set([...current.devDependencies, ...(update.architecture.devDependencies || [])])],
         };
         writeJSON(path.join(rootDir, MEMORY_FILES.architecture), merged);
     }
@@ -196,9 +215,10 @@ export function updateMemory(rootDir: string, update: MemoryUpdate): void {
     }
 }
 
-// ── Decision ───────────────────────────────────────────────────────────
-
 export function appendDecision(rootDir: string, text: string): void {
+    const memDir = path.join(rootDir, MEMORY_FILES.dir);
+    ensureDir(memDir);
+
     const filePath = path.join(rootDir, MEMORY_FILES.decisions);
     const timestamp = new Date().toISOString();
     const entry = `\n- **[${timestamp}]** ${text}\n`;
@@ -209,8 +229,6 @@ export function appendDecision(rootDir: string, text: string): void {
         fs.appendFileSync(filePath, entry, 'utf-8');
     }
 }
-
-// ── Detection helpers ──────────────────────────────────────────────────
 
 function detectLanguages(files: string[]): string[] {
     const extMap: Record<string, string> = {
